@@ -23,7 +23,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     url: process.env.VITE_BASEROW_URL,
     table: process.env.VITE_TABLE_ID,
-    token: process.env.VITE_BASEROW_TOKEN ? 'FOUND' : 'MISSING'
+    token: process.env.VITE_BASEROW_TOKEN ? 'FOUND' : 'MISSING',
+    clientUrl: CLIENT_URL
   });
 });
 
