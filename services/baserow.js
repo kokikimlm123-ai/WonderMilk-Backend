@@ -11,6 +11,9 @@ class BaserowService {
     console.log('URL:', process.env.VITE_BASEROW_URL);
 console.log('TOKEN:', process.env.VITE_BASEROW_TOKEN ? 'FOUND' : 'MISSING');
 console.log('TABLE:', process.env.VITE_TABLE_ID);
+console.log('BASE URL =', this.baseURL);
+console.log('TABLE ID =', this.tableId);
+console.log('TOKEN EXISTS =', !!this.token);
 
     if (!this.token || !this.tableId) {
       console.warn('⚠️ Missing Baserow credentials in environment variables');
