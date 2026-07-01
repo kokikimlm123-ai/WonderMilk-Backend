@@ -1,5 +1,6 @@
 import express from 'express';
 import baserow from '../services/baserow.js';
+import { FIELD_MAP } from '../config/fieldMap.js';
 
 const router = express.Router();
 
@@ -22,8 +23,7 @@ router.get('/', async (req, res, next) => {
     
     if (feedType) {
       results = results.filter(row => {
-        // Use correct field ID for Feed Type
-        const ft = row['field_9063548'] || row['Feed_Type'] || row['Feed Type'] || '';
+        const ft = row[FIELD_MAP.FEED_TYPE] || row.Feed_Type || row['Feed Type'] || '';
         return ft.toLowerCase().includes(feedType.toLowerCase());
       });
     }
