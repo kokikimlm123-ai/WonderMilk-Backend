@@ -1,5 +1,6 @@
 export const FIELD_MAP = {
-  FEED_TYPE: 'field_9063717',
+  FEED_TYPE: 'field_9063548',
+  PRODUCT_NAME: 'field_9063717',
   CP: 'field_9063541',
   NDF: 'field_9063630',
   ADF: 'field_9063526',

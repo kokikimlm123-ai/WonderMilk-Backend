@@ -1,7 +1,60 @@
 import express from 'express';
 import baserow from '../services/baserow.js';
+import { FIELD_MAP } from '../config/fieldMap.js';
 
 const router = express.Router();
+
+const nutrientFields = [
+  { key: 'cp', label: 'CP', field: FIELD_MAP.CP, unit: '%' },
+  { key: 'ndf', label: 'NDF', field: FIELD_MAP.NDF, unit: '%' },
+  { key: 'adf', label: 'ADF', field: FIELD_MAP.ADF, unit: '%' },
+  { key: 'fat', label: 'Fat', field: FIELD_MAP.FAT, unit: '%' },
+  { key: 'ash', label: 'Ash', field: FIELD_MAP.ASH, unit: '%' },
+  { key: 'starch', label: 'Starch', field: FIELD_MAP.STARCH, unit: '%' }
+];
+
+const asNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const average = (rows, field) => {
+  const values = rows.map((row) => asNumber(row[field])).filter((value) => value !== null);
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+const formatAverage = (value) => (value === null ? null : Number(value.toFixed(2)));
+
+const getFeedType = (row) => {
+  const value = row[FIELD_MAP.FEED_TYPE] || row.Feed_Type || row['Feed Type'];
+  return String(value || 'Unknown').trim() || 'Unknown';
+};
+
+const buildFeedAnalysis = (samples) => {
+  const groups = new Map();
+
+  samples.forEach((row) => {
+    const feedType = getFeedType(row);
+    if (!groups.has(feedType)) groups.set(feedType, []);
+    groups.get(feedType).push(row);
+  });
+
+  return Array.from(groups.entries())
+    .map(([feedType, rows]) => {
+      const averages = Object.fromEntries(
+        nutrientFields.map(({ key, field }) => [key, formatAverage(average(rows, field))])
+      );
+
+      return {
+        feedType,
+        sampleCount: rows.length,
+        percentage: samples.length ? Number(((rows.length / samples.length) * 100).toFixed(1)) : 0,
+        averages
+      };
+    })
+    .sort((a, b) => b.sampleCount - a.sampleCount || a.feedType.localeCompare(b.feedType));
+};
 
 /**
  * Dashboard Metrics
@@ -16,33 +69,12 @@ router.get('/metrics', async (req, res, next) => {
     console.log("Dashboard Metrics");
     console.log("Total Records:", samples.length);
 
-    // Average helper
-    const avg = (field) => {
-      const values = samples
-        .map(row => Number(row[field]))
-        .filter(v => !isNaN(v));
+    const feedAnalysis = buildFeedAnalysis(samples);
+    const feedTypeCounts = Object.fromEntries(
+      feedAnalysis.map((item) => [item.feedType, item.sampleCount])
+    );
 
-      if (values.length === 0) return "0.00";
-
-      return (
-        values.reduce((a, b) => a + b, 0) /
-        values.length
-      ).toFixed(2);
-    };
-
-    // Feed Type Distribution
-    const feedTypeCounts = {};
-
-    samples.forEach((row) => {
-
-      const feedType =
-        row.field_9063548 ||
-        "Unknown";
-
-      feedTypeCounts[feedType] =
-        (feedTypeCounts[feedType] || 0) + 1;
-
-    });
+    const avg = (field) => formatAverage(average(samples, field)) ?? 0;
 
     res.json({
       success: true,
@@ -50,21 +82,23 @@ router.get('/metrics', async (req, res, next) => {
 
         totalSamples: samples.length,
 
-        feedTypeCount: Object.keys(feedTypeCounts).length,
+        feedTypeCount: feedAnalysis.length,
 
-        averageCP: avg('field_9063541'),
+        averageCP: avg(FIELD_MAP.CP),
 
-        averageADF: avg('field_9063526'),
+        averageADF: avg(FIELD_MAP.ADF),
 
-        averageNDF: avg('field_9063630'),
+        averageNDF: avg(FIELD_MAP.NDF),
 
-        averageFat: avg('field_9063545'),
+        averageFat: avg(FIELD_MAP.FAT),
 
-        averageAsh: avg('field_9063529'),
+        averageAsh: avg(FIELD_MAP.ASH),
 
-        averageStarch: avg('field_9063724'),
+        averageStarch: avg(FIELD_MAP.STARCH),
 
         feedTypeDistribution: feedTypeCounts,
+
+        feedAnalysis,
 
         lastUpdated: new Date().toISOString()
 
@@ -90,29 +124,14 @@ router.get('/feed-types', async (req, res, next) => {
 
     const samples = data.results || [];
 
-    const feedTypes = {};
+    const distribution = buildFeedAnalysis(samples).map(
+      ({ feedType, sampleCount, percentage }) => ({
 
-    samples.forEach((row) => {
+        name: feedType,
 
-      const feedType =
-        row.field_9063548 ||
-        "Unknown";
+        count: sampleCount,
 
-      feedTypes[feedType] =
-        (feedTypes[feedType] || 0) + 1;
-
-    });
-
-    const distribution = Object.entries(feedTypes).map(
-      ([name, count]) => ({
-
-        name,
-
-        count,
-
-        percentage: (
-          (count / samples.length) * 100
-        ).toFixed(1)
+        percentage
 
       })
     );
@@ -131,6 +150,30 @@ router.get('/feed-types', async (req, res, next) => {
 
   }
 
+});
+
+/**
+ * Dynamic feed-type analytics
+ */
+router.get('/feed-analysis', async (req, res, next) => {
+  try {
+    const data = await baserow.getAllRows();
+    const samples = data.results || [];
+    const analysis = buildFeedAnalysis(samples);
+
+    res.json({
+      success: true,
+      data: {
+        totalSamples: samples.length,
+        feedTypeCount: analysis.length,
+        nutrients: nutrientFields.map(({ key, label, unit }) => ({ key, label, unit })),
+        feedTypes: analysis,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;
